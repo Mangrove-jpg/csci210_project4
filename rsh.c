@@ -6,6 +6,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <signal.h>
 
 #define N 13
 
@@ -31,13 +32,27 @@ void sendmsg (char *user, char *target, char *msg) {
 	// Send a request to the server to send the message (msg) to the target user (target)
 	// by creating the message structure and writing it to server's FIFO
 
+	// Open write end of FIFO
+	int serverFIFO;
+	serverFIFO = open("serverFIFO", O_WRONLY);
 
+	// Create message struct
+	struct message deliverable;
+	
+	strcpy(deliverable.source, user);
+	strcpy(deliverable.target, target);
+	strcpy(deliverable.msg, msg);
 
+	// Write that message to the file
 
+	if (write(serverFIFO, &deliverable, sizeof(struct message)) != sizeof(struct message)) {
+		printf("Failed to open file");
+		close(serverFIFO);
+		exit(1);
+	}
 
-
-
-
+	// Close FIFO
+	close(serverFIFO);
 }
 
 void* messageListener(void *arg) {
@@ -49,11 +64,24 @@ void* messageListener(void *arg) {
 	// Incoming message from [source]: [message]
 	// put an end of line at the end of the message
 
+	// Create a storage message struct
+	struct message incoming_message;
 
+	// Open the user fifo
+	int clientFD;
+	clientFD = open(arg ,O_RDONLY);
 
+	while (1) {
+		// Read incoming message struct
+		if (read(clientFD, &incoming_message, sizeof(struct message)) != sizeof(struct message))
+		{
+			continue;
+		}
 
+		// print Message to the standard output
 
-
+		printf("Incoming message from %s: %s\n", incoming_message.source, incoming_message.msg);
+	}
 	pthread_exit((void*)0);
 }
 
@@ -85,10 +113,8 @@ int main(int argc, char **argv) {
 
     // TODO:
     // create the message listener thread
-
-
-
-
+	pthread_t listenerThread;
+	pthread_create(&listenerThread, NULL, messageListener, argv[1]);
 
     while (1) {
 
@@ -114,6 +140,28 @@ int main(int argc, char **argv) {
 		// TODO: Create the target user and
 		// the message string and call the sendmsg function
 
+		// Get the target and message
+		char *target = strtok(NULL, " ");
+
+		// Handle edge case where no target is specified
+		if (target == NULL)
+		{	
+			printf("sendmsg: you have to specify target user\n");
+			continue;
+		}
+
+		char *msg = strtok(NULL, "");
+
+		if (msg == NULL)
+		{
+			printf("sendmsg: you have to enter a message\n");
+			continue;
+		}
+
+		// Call the sendmsg function
+		sendmsg(argv[1], target, msg);
+		   
+
 		// NOTE: The message itself can contain spaces
 		// If the user types: "sendmsg user1 hello there"
 		// target should be "user1" 
@@ -123,15 +171,6 @@ int main(int argc, char **argv) {
 		// printf("sendmsg: you have to specify target user\n");
 		// if no message is specified, you should print the followingA
  		// printf("sendmsg: you have to enter a message\n");
-
-
-
-
-
-
-
-
-
 
 		continue;
 	}
